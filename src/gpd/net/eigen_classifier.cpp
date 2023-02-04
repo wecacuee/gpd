@@ -1,4 +1,5 @@
 #include <gpd/net/eigen_classifier.h>
+#include <omp.h>
 
 namespace gpd {
 namespace net {

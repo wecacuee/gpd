@@ -1,17 +1,19 @@
 cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 project(gpd)
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 # Eigen library
 include_directories(${EIGEN3_INCLUDE_DIR})
 
 # PCL
-find_package(PCL 1.9 REQUIRED)
+find_package(PCL 1.10 REQUIRED)
 #find_package(PCL 1.8 REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
+
+find_package(OpenMP REQUIRED)
 
 # OpenCV
 find_package(OpenCV REQUIRED)
@@ -26,7 +28,7 @@ find_package(OpenCV REQUIRED)
 # set(CMAKE_CXX_FLAGS "-frename-registers -Ofast -march=native -fopenmp -fPIC -Wno-deprecated -Wenum-compare") # no improvement
 
 #set(CMAKE_CXX_FLAGS "-fopenmp -fPIC -Wno-deprecated -Wenum-compare -Wno-ignored-attributes -std=c++17")
-set(CMAKE_CXX_FLAGS "-O3 -march=native -mtune=intel -msse4.2 -mavx2 -mfma -flto -fopenmp -fPIC -Wno-deprecated -Wenum-compare -Wno-ignored-attributes -std=c++17")
+#set(CMAKE_CXX_FLAGS "-O3 -march=native -mtune=intel -msse4.2 -mavx2 -mfma -flto -fopenmp -fPIC -Wno-deprecated -Wenum-compare -Wno-ignored-attributes -std=c++17")
 
 ## Specify additional locations of header files
 include_directories(include ${PCL_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
@@ -62,8 +64,8 @@ elseif(USE_CAFFE STREQUAL "ON")
 elseif(USE_OPENCV STREQUAL "ON")
   message(FATAL_ERROR "Not supported yet")
 else()
-  add_library(${PROJECT_NAME}_conv_layer src/${PROJECT_NAME}/net/conv_layer.cpp)
-  add_library(${PROJECT_NAME}_dense_layer src/${PROJECT_NAME}/net/dense_layer.cpp)
+    add_library(${PROJECT_NAME}_conv_layer SHARED src/${PROJECT_NAME}/net/conv_layer.cpp)
+    add_library(${PROJECT_NAME}_dense_layer SHARED src/${PROJECT_NAME}/net/dense_layer.cpp)
   set(classifier_src src/${PROJECT_NAME}/net/classifier.cpp src/${PROJECT_NAME}/net/eigen_classifier.cpp)
   set(classifier_dep ${PROJECT_NAME}_conv_layer ${PROJECT_NAME}_dense_layer ${OpenCV_LIBRARIES})
 endif()
@@ -87,7 +89,8 @@ if(BUILD_DATA_GENERATION STREQUAL "ON")
   target_link_libraries(${PROJECT_NAME}_data_generator
    ${PROJECT_NAME}_grasp_detector
    ${PCL_LIBRARIES}
-   ${OpenCV_LIBS})
+   ${OpenCV_LIBS}
+   PRIVATE OpenMP::OpemMP_CXX)
   add_executable(${PROJECT_NAME}_generate_data src/generate_data.cpp)
   target_link_libraries(${PROJECT_NAME}_generate_data
    ${PROJECT_NAME}_data_generator)
@@ -97,7 +100,7 @@ endif()
 # Generate the shared library from the sources
 add_library(${PROJECT_NAME}_grasp_detector SHARED src/${PROJECT_NAME}/grasp_detector.cpp)
 
-add_library(${PROJECT_NAME}_classifier ${classifier_src})
+add_library(${PROJECT_NAME}_classifier SHARED ${classifier_src})
 target_link_libraries(${PROJECT_NAME}_classifier
                       ${classifier_dep})
 
@@ -105,32 +108,38 @@ add_library(${PROJECT_NAME}_clustering src/${PROJECT_NAME}/clustering.cpp)
 add_library(${PROJECT_NAME}_sequential_importance_sampling src/${PROJECT_NAME}/sequential_importance_sampling.cpp)
 
 # namespace candidate
-add_library(${PROJECT_NAME}_antipodal src/${PROJECT_NAME}/candidate/antipodal.cpp)
-add_library(${PROJECT_NAME}_candidates_generator src/${PROJECT_NAME}/candidate/candidates_generator.cpp)
-add_library(${PROJECT_NAME}_finger_hand src/${PROJECT_NAME}/candidate/finger_hand.cpp)
-add_library(${PROJECT_NAME}_frame_estimator src/${PROJECT_NAME}/candidate/frame_estimator.cpp)
-add_library(${PROJECT_NAME}_hand src/${PROJECT_NAME}/candidate/hand.cpp)
-add_library(${PROJECT_NAME}_hand_set src/${PROJECT_NAME}/candidate/hand_set.cpp)
-add_library(${PROJECT_NAME}_hand_geometry src/${PROJECT_NAME}/candidate/hand_geometry.cpp)
-add_library(${PROJECT_NAME}_hand_search src/${PROJECT_NAME}/candidate/hand_search.cpp)
-add_library(${PROJECT_NAME}_local_frame src/${PROJECT_NAME}/candidate/local_frame.cpp)
+add_library(${PROJECT_NAME}_antipodal SHARED
+    src/${PROJECT_NAME}/candidate/antipodal.cpp)
+add_library(${PROJECT_NAME}_candidates_generator SHARED
+    src/${PROJECT_NAME}/candidate/candidates_generator.cpp)
+add_library(${PROJECT_NAME}_hand SHARED
+    src/${PROJECT_NAME}/candidate/finger_hand.cpp
+    src/${PROJECT_NAME}/candidate/hand.cpp
+    src/${PROJECT_NAME}/candidate/hand_set.cpp
+    src/${PROJECT_NAME}/candidate/hand_geometry.cpp
+    src/${PROJECT_NAME}/candidate/hand_search.cpp)
+add_library(${PROJECT_NAME}_frame_estimator SHARED
+    src/${PROJECT_NAME}/candidate/frame_estimator.cpp
+    src/${PROJECT_NAME}/candidate/local_frame.cpp)
 
 # namespace util
-add_library(${PROJECT_NAME}_cloud src/${PROJECT_NAME}/util/cloud.cpp)
-add_library(${PROJECT_NAME}_config_file src/${PROJECT_NAME}/util/config_file.cpp)
-add_library(${PROJECT_NAME}_eigen_utils src/${PROJECT_NAME}/util/eigen_utils.cpp)
-add_library(${PROJECT_NAME}_plot src/${PROJECT_NAME}/util/plot.cpp)
-add_library(${PROJECT_NAME}_point_list src/${PROJECT_NAME}/util/point_list.cpp)
+add_library(${PROJECT_NAME}_util SHARED
+    src/${PROJECT_NAME}/util/plot.cpp
+    src/${PROJECT_NAME}/util/config_file.cpp
+    src/${PROJECT_NAME}/util/cloud.cpp
+    src/${PROJECT_NAME}/util/eigen_utils.cpp
+    src/${PROJECT_NAME}/util/point_list.cpp
+    src/${PROJECT_NAME}/descriptor/image_geometry.cpp)
 
 # namespace descriptor
-add_library(${PROJECT_NAME}_image_strategy src/${PROJECT_NAME}/descriptor/image_strategy.cpp)
-add_library(${PROJECT_NAME}_image_1_channels_strategy src/${PROJECT_NAME}/descriptor/image_1_channels_strategy.cpp)
-add_library(${PROJECT_NAME}_image_3_channels_strategy src/${PROJECT_NAME}/descriptor/image_3_channels_strategy.cpp)
-add_library(${PROJECT_NAME}_image_12_channels_strategy src/${PROJECT_NAME}/descriptor/image_12_channels_strategy.cpp)
-add_library(${PROJECT_NAME}_image_15_channels_strategy src/${PROJECT_NAME}/descriptor/image_15_channels_strategy.cpp)
-add_library(${PROJECT_NAME}_image_geometry src/${PROJECT_NAME}/descriptor/image_geometry.cpp)
+add_library(${PROJECT_NAME}_image_strategy SHARED 
+    src/${PROJECT_NAME}/descriptor/image_strategy.cpp
+    src/${PROJECT_NAME}/descriptor/image_1_channels_strategy.cpp
+    src/${PROJECT_NAME}/descriptor/image_3_channels_strategy.cpp
+    src/${PROJECT_NAME}/descriptor/image_12_channels_strategy.cpp
+    src/${PROJECT_NAME}/descriptor/image_15_channels_strategy.cpp)
 
-add_library(${PROJECT_NAME}_image_generator src/${PROJECT_NAME}/descriptor/image_generator.cpp)
+add_library(${PROJECT_NAME}_image_generator SHARED src/${PROJECT_NAME}/descriptor/image_generator.cpp)
 
 ## Declare C++ executables
 add_executable(${PROJECT_NAME}_cem_detect_grasps src/cem_detect_grasps.cpp)
@@ -151,97 +160,43 @@ target_link_libraries(${PROJECT_NAME}_grasp_detector
   ${PROJECT_NAME}_image_generator
   ${PROJECT_NAME}_classifier
   ${PROJECT_NAME}_candidates_generator
-  ${PROJECT_NAME}_hand_geometry
-  ${PROJECT_NAME}_hand_set
-  ${PROJECT_NAME}_config_file
-  ${PROJECT_NAME}_plot)
+  ${PROJECT_NAME}_hand
+  ${PROJECT_NAME}_util)
 
 target_link_libraries(${PROJECT_NAME}_generate_candidates
-  ${PROJECT_NAME}_config_file
-${PROJECT_NAME}_candidates_generator)
+  ${PROJECT_NAME}_util
+  ${PROJECT_NAME}_candidates_generator)
 
 # Linking for libraries
 target_link_libraries(${PROJECT_NAME}_antipodal
-${PROJECT_NAME}_point_list)
-
-target_link_libraries(${PROJECT_NAME}_cloud
-  ${PROJECT_NAME}_eigen_utils
-  ${PCL_LIBRARIES})
-
-target_link_libraries(${PROJECT_NAME}_eigen_utils
-${EIGEN_LIBRARIES})
+${PROJECT_NAME}_util)
 
 target_link_libraries(${PROJECT_NAME}_frame_estimator
-  ${PROJECT_NAME}_cloud
-${PROJECT_NAME}_local_frame)
+  ${PROJECT_NAME}_util)
 
 target_link_libraries(${PROJECT_NAME}_hand
-${PROJECT_NAME}_finger_hand)
-
-target_link_libraries(${PROJECT_NAME}_hand_set
   ${PROJECT_NAME}_antipodal
-  ${PROJECT_NAME}_config_file
-  ${PROJECT_NAME}_hand
-  ${PROJECT_NAME}_hand_geometry
-  ${PROJECT_NAME}_local_frame
-${PROJECT_NAME}_point_list)
-
-target_link_libraries(${PROJECT_NAME}_hand_geometry
-${PROJECT_NAME}_config_file)
-
-target_link_libraries(${PROJECT_NAME}_hand_search
+  ${PROJECT_NAME}_util
   ${PROJECT_NAME}_antipodal
-  ${PROJECT_NAME}_cloud
   ${PROJECT_NAME}_frame_estimator
-  ${PROJECT_NAME}_hand_set
-  ${PROJECT_NAME}_hand_geometry
-  ${PROJECT_NAME}_plot)
+  OpenMP::OpenMP_CXX)
 
-target_link_libraries(${PROJECT_NAME}_plot
-  ${PROJECT_NAME}_cloud
-  ${PROJECT_NAME}_hand_set
-  ${PROJECT_NAME}_image_geometry
-${PROJECT_NAME}_local_frame)
+target_link_libraries(${PROJECT_NAME}_util
+    ${PCL_LIBRARIES})
 
 target_link_libraries(${PROJECT_NAME}_candidates_generator
-  ${PROJECT_NAME}_config_file
-  ${PROJECT_NAME}_hand_geometry
-${PROJECT_NAME}_hand_search)
-
-target_link_libraries(${PROJECT_NAME}_point_list
-${PROJECT_NAME}_eigen_utils)
+  ${PROJECT_NAME}_util
+  ${PROJECT_NAME}_hand)
 
 target_link_libraries(${PROJECT_NAME}_image_strategy
-  ${PROJECT_NAME}_image_geometry
-  ${PROJECT_NAME}_image_1_channels_strategy
-  ${PROJECT_NAME}_image_3_channels_strategy
-  ${PROJECT_NAME}_image_12_channels_strategy
-  ${PROJECT_NAME}_image_15_channels_strategy
-  ${PROJECT_NAME}_hand_set
-${OpenCV_LIBS})
-
-
-target_link_libraries(${PROJECT_NAME}_image_1_channels_strategy
-${PROJECT_NAME}_image_strategy)
-
-target_link_libraries(${PROJECT_NAME}_image_3_channels_strategy
-${PROJECT_NAME}_image_strategy)
-
-target_link_libraries(${PROJECT_NAME}_image_12_channels_strategy
-${PROJECT_NAME}_image_strategy)
-
-target_link_libraries(${PROJECT_NAME}_image_15_channels_strategy
-${PROJECT_NAME}_image_strategy)
-
-target_link_libraries(${PROJECT_NAME}_image_geometry
-${PROJECT_NAME}_config_file)
+  ${PROJECT_NAME}_hand
+  ${OpenCV_LIBS})
 
 target_link_libraries(${PROJECT_NAME}_image_generator
   ${PROJECT_NAME}_image_strategy
-  ${PROJECT_NAME}_hand_set
+  ${PROJECT_NAME}_hand
   ${PROJECT_NAME}_image_strategy
-  ${PROJECT_NAME}_cloud
-${PROJECT_NAME}_eigen_utils)
+  ${PROJECT_NAME}_util)
 
 target_link_libraries(${PROJECT_NAME}_sequential_importance_sampling
   ${PROJECT_NAME}_grasp_detector)
@@ -249,27 +204,27 @@ target_link_libraries(${PROJECT_NAME}_sequential_importance_sampling
 target_link_libraries(${PROJECT_NAME}_test_grasp_image
   ${PROJECT_NAME}_image_generator
   ${PROJECT_NAME}_classifier
-  ${PROJECT_NAME}_plot
+  ${PROJECT_NAME}_util
   ${PROJECT_NAME}_candidates_generator
 ${PCL_LIBRARIES})
 
 target_link_libraries(${PROJECT_NAME}_detect_grasps
   ${PROJECT_NAME}_grasp_detector
-  ${PROJECT_NAME}_config_file
+  ${PROJECT_NAME}_util
 ${PCL_LIBRARIES})
 
 target_link_libraries(${PROJECT_NAME}_label_grasps
   ${PROJECT_NAME}_grasp_detector
-  ${PROJECT_NAME}_config_file
+  ${PROJECT_NAME}_util
 ${PCL_LIBRARIES})
 
 target_link_libraries(${PROJECT_NAME}_cem_detect_grasps
   ${PROJECT_NAME}_sequential_importance_sampling
-  ${PROJECT_NAME}_config_file
+  ${PROJECT_NAME}_util
   ${PCL_LIBRARIES})
 
 target_link_libraries(${PROJECT_NAME}_image_generator
-  ${PROJECT_NAME}_hand_set
+  ${PROJECT_NAME}_hand
   ${PROJECT_NAME}_image_strategy)
 
 # Rename targets to simplify their names.

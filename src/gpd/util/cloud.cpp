@@ -1,4 +1,5 @@
 #include <gpd/util/cloud.h>
+#include <omp.h>
 
 #include <pcl/common/common.h>
 #include <pcl/filters/extract_indices.h>
